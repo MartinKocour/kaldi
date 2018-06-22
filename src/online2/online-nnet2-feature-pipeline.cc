@@ -18,7 +18,6 @@
 // limitations under the License.
 
 #include "online2/online-nnet2-feature-pipeline.h"
-#include "transform/cmvn.h"
 
 namespace kaldi {
 
@@ -74,6 +73,20 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
   } else {
     use_ivectors = false;
   }
+
+  if (config.splice_config_rxfilename != "") {
+      splice_feats = true;
+      ReadConfigFromFile(config.splice_config_rxfilename, &splice_opts);
+  } else {
+      splice_feats = false;
+  }
+
+  if (config.lda_rxfilename != "") {
+      use_lda = true;
+      ReadKaldiObject(config.lda_rxfilename, &lda_mat_);
+  } else {
+      use_lda = false;
+  }
 }
 
 OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
@@ -88,17 +101,35 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   } else {
     KALDI_ERR << "Code error: invalid feature type " << info_.feature_type;
   }
+  final_feature_ = base_feature_;
 
   if (info_.add_pitch) {
     pitch_ = new OnlinePitchFeature(info_.pitch_opts);
     pitch_feature_ = new OnlineProcessPitch(info_.pitch_process_opts,
                                             pitch_);
+//    TODO: Add CMVN
+//    cmvn_ = new OnlineCmvn(config_.cmvn_opts, initial_state, base_feature_); see online-feature-pipeline.cc
     feature_plus_optional_pitch_ = new OnlineAppendFeature(base_feature_,
                                                            pitch_feature_);
+    final_feature_ = feature_plus_optional_pitch_;
   } else {
     pitch_ = NULL;
     pitch_feature_ = NULL;
     feature_plus_optional_pitch_ = base_feature_;
+  }
+
+  if (info_.splice_feats) {
+    splice_ = new OnlineSpliceFrames(info.splice_opts, final_feature_);
+    final_feature_ = splice_;
+  } else {
+    splice_ = NULL;
+  }
+
+  if (info.use_lda) {
+    lda_ = new OnlineTransform(info.lda_mat_, final_feature_);
+    final_feature_ = lda_;
+  } else {
+    lda_ = NULL;
   }
 
   if (info_.use_ivectors) {
@@ -108,24 +139,51 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
                                              ivector_feature_);
   } else {
     ivector_feature_ = NULL;
-    final_feature_ = feature_plus_optional_pitch_;
   }
   dim_ = final_feature_->Dim();
 }
 
-int32 OnlineNnet2FeaturePipeline::Dim() const { return dim_; }
+// TODO: Use this method
+void OnlineNnet2FeaturePipeline::SetTransform(const MatrixBase<BaseFloat> &transform) {
+  if (fmllr_ != NULL) {  // we already had a transform;  delete this
+    // object.
+    delete fmllr_;
+    fmllr_ = NULL;
+  }
+  if (transform.NumRows() != 0) {
+    OnlineFeatureInterface *feat = UnadaptedFeature();
+    fmllr_ = new OnlineTransform(transform, feat);
+  }
+}
+
+
+OnlineFeatureInterface* OnlineNnet2FeaturePipeline::UnadaptedFeature() const {
+  KALDI_ASSERT(final_feature_ != NULL);
+  return final_feature_;
+}
+
+OnlineFeatureInterface* OnlineNnet2FeaturePipeline::AdaptedFeature() const {
+  if (fmllr_ != NULL) {
+    return fmllr_;
+  }
+  return UnadaptedFeature();
+}
+
+int32 OnlineNnet2FeaturePipeline::Dim() const {
+  return AdaptedFeature()->Dim();
+}
 
 bool OnlineNnet2FeaturePipeline::IsLastFrame(int32 frame) const {
-  return final_feature_->IsLastFrame(frame);
+  return AdaptedFeature()->IsLastFrame(frame);
 }
 
 int32 OnlineNnet2FeaturePipeline::NumFramesReady() const {
-  return final_feature_->NumFramesReady();
+  return AdaptedFeature()->NumFramesReady();
 }
 
 void OnlineNnet2FeaturePipeline::GetFrame(int32 frame,
                                           VectorBase<BaseFloat> *feat) {
-  return final_feature_->GetFrame(frame, feat);
+  return AdaptedFeature()->GetFrame(frame, feat);
 }
 
 void OnlineNnet2FeaturePipeline::SetAdaptationState(

@@ -83,6 +83,12 @@ struct OnlineNnet2FeaturePipelineConfig {
   // OnlineIvectorExtractionConfig.
   std::string ivector_extraction_config;
 
+  // LDA matrice
+  std::string lda_rxfilename;
+
+  // Splice config
+  std::string splice_config_rxfilename;
+
   // Config that relates to how we weight silence for (ivector) adaptation
   // this is registered directly to the command line as you might want to
   // play with it in test time.
@@ -109,6 +115,11 @@ struct OnlineNnet2FeaturePipelineConfig {
     opts->Register("ivector-extraction-config", &ivector_extraction_config,
                    "Configuration file for online iVector extraction, "
                    "see class OnlineIvectorExtractionConfig in the code");
+    opts->Register("lda-matrix", &lda_rxfilename, "Filename of LDA matrix (if "
+                   "using LDA), e.g. exp/foo/final.mat");
+    opts->Register("splice-config", &splice_config_rxfilename, "Configuration file "
+                   "for frame splicing (--left-context and --right-context "
+                   "options)");
     silence_weighting_config.RegisterWithPrefix("ivector-silence-weighting", opts);
   }
 };
@@ -149,6 +160,12 @@ struct OnlineNnet2FeaturePipelineInfo {
   // anticipate running this setup without iVectors.
   bool use_ivectors;
   OnlineIvectorExtractionInfo ivector_extractor_info;
+
+  bool use_lda;
+  Matrix<BaseFloat> lda_mat_;
+
+  bool splice_feats;
+  OnlineSpliceOptions splice_opts;
 
   // Config for weighting silence in iVector adaptation.
   // We declare this outside of ivector_extractor_info... it was
@@ -228,6 +245,15 @@ class OnlineNnet2FeaturePipeline: public OnlineFeatureInterface {
   /// rescoring the lattices, this may not be much of an issue.
   void InputFinished();
 
+  // This object is used to set the fMLLR transform.  Call it with
+  // the empty matrix if you want to stop it using any transform.
+  void SetTransform(const MatrixBase<BaseFloat> &transform);
+
+
+  // Returns true if an fMLLR transform has been set using
+  // SetTransform().
+  bool HaveFmllrTransform() { return fmllr_ != NULL; }
+
   // This function returns the ivector-extracting part of the feature pipeline
   // (or NULL if iVectors are not being used); the pointer is owned here and not
   // given to the caller.  This function is used in nnet3, and also in the
@@ -268,6 +294,15 @@ class OnlineNnet2FeaturePipeline: public OnlineFeatureInterface {
 
   // we cache the feature dimension, to save time when calling Dim().
   int32 dim_;
+
+  OnlineSpliceFrames *splice_;
+  OnlineTransform *lda_;
+
+  OnlineFeatureInterface* UnadaptedFeature() const;
+
+  OnlineFeatureInterface *fmllr_;
+
+  OnlineFeatureInterface* AdaptedFeature() const;
 };
 
 
