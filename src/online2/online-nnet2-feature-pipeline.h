@@ -270,7 +270,14 @@ class OnlineNnet2FeaturePipeline: public OnlineFeatureInterface {
   }
 
   virtual ~OnlineNnet2FeaturePipeline();
- private:
+
+  void GetAsMatrix(Matrix <BaseFloat> *feats);
+
+  void GetCmvnState(OnlineCmvnState *cmvn_state);
+
+  void FreezeCmvn();
+
+private:
 
   const OnlineNnet2FeaturePipelineInfo &info_;
 

@@ -232,6 +232,27 @@ void OnlineNnet2FeaturePipeline::InputFinished() {
     pitch_->InputFinished();
 }
 
+void OnlineNnet2FeaturePipeline::GetAsMatrix(Matrix<BaseFloat> *feats) {
+  if (pitch_) {
+    feats->Resize(NumFramesReady(), pitch_feature_->Dim());
+    for (int32 i = 0; i < NumFramesReady(); i++) {
+      SubVector<BaseFloat> row(*feats, i);
+      pitch_feature_->GetFrame(i, &row);
+    }
+  }
+}
+
+void OnlineNnet2FeaturePipeline::GetCmvnState(OnlineCmvnState *cmvn_state) {
+// TODO: store CMVN state
+//  int32 frame = cmvn_->NumFramesReady() - 1;
+    // the following call will crash if no frames are ready.
+//  cmvn_->GetState(frame, cmvn_state);
+}
+
+void OnlineNnet2FeaturePipeline::FreezeCmvn() {
+    //TODO: cmvn_->Freeze(cmvn_->NumFramesReady() - 1);
+}
+
 BaseFloat OnlineNnet2FeaturePipelineInfo::FrameShiftInSeconds() const {
   if (feature_type == "mfcc") {
     return mfcc_opts.frame_opts.frame_shift_ms / 1000.0f;

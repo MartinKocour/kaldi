@@ -37,6 +37,7 @@
 #include "decoder/lattice-faster-online-decoder.h"
 #include "hmm/transition-model.h"
 #include "util/kaldi-semaphore.h"
+#include "online-gmm-decoding.h"
 
 namespace kaldi {
 /// @addtogroup  onlinedecoding OnlineDecoding
@@ -119,8 +120,13 @@ class ThreadSynchronizer {
 // separately, and which are not included here: namely,
 // OnlineNnet2FeaturePipelineConfig and OnlineEndpointConfig.
 struct OnlineNnet2DecodingThreadedConfig {
+  BaseFloat fmllr_lattice_beam;
+
+  BasisFmllrOptions basis_opts; // options for basis-fMLLR adaptation.
 
   LatticeFasterDecoderConfig decoder_opts;
+
+  OnlineGmmDecodingAdaptationPolicyConfig adaptation_policy_opts;
 
   BaseFloat acoustic_scale;
 
@@ -150,8 +156,13 @@ struct OnlineNnet2DecodingThreadedConfig {
                             // here is a mutex lock/unlock, so it's OK to make
                             // this fairly small.
 
+  std::string silence_phones;
+  BaseFloat silence_weight;
+
   OnlineNnet2DecodingThreadedConfig() {
+    fmllr_lattice_beam = 3.0;
     acoustic_scale = 0.1;
+    silence_weight = 0.1;
     max_buffered_features = 100;
     feature_batch_size = 2;
     nnet_batch_size = 32;
@@ -162,9 +173,21 @@ struct OnlineNnet2DecodingThreadedConfig {
   void Check();
 
   void Register(OptionsItf *opts) {
+    { // register basis_opts with prefix, there are getting to be too many
+      // options.
+      ParseOptions basis_po("basis", opts);
+      basis_opts.Register(&basis_po);
+    }
+    adaptation_policy_opts.Register(opts);
     decoder_opts.Register(opts);
     opts->Register("acoustic-scale", &acoustic_scale, "Scale used on acoustics "
                    "when decoding");
+    opts->Register("silence-phones", &silence_phones,
+                   "Colon-separated list of integer ids of silence phones, e.g. "
+                   "1:2:3 (affects adaptation).");
+    opts->Register("silence-weight", &silence_weight,
+                   "Weight applied to silence frames for fMLLR estimation (if "
+                   "--silence-phones option is supplied)");
     opts->Register("max-buffered-features", &max_buffered_features, "Obscure "
                    "setting, affects multi-threaded decoding.");
     opts->Register("feature-batch-size", &max_buffered_features, "Obscure "
@@ -175,6 +198,8 @@ struct OnlineNnet2DecodingThreadedConfig {
                    "setting, affects multi-threaded decoding.");
     opts->Register("decode-batch-sie", &decode_batch_size, "Obscure "
                    "setting, affects multi-threaded decoding.");
+    opts->Register("fmllr-lattice-beam", &fmllr_lattice_beam, "Beam used in "
+                   "pruning lattices for fMLLR estimation");
   }
 };
 
@@ -200,7 +225,9 @@ class SingleUtteranceNnet2DecoderThreaded {
       const nnet2::AmNnet &am_nnet,
       const fst::Fst<fst::StdArc> &fst,
       const OnlineNnet2FeaturePipelineInfo &feature_info,
-      const OnlineIvectorExtractorAdaptationState &adaptation_state);
+      const OnlineIvectorExtractorAdaptationState &adaptation_state,
+      const OnlineGmmAdaptationState &gmm_adaptation_state,
+      const OnlineGmmDecodingModels &models);
 
 
 
@@ -301,7 +328,10 @@ class SingleUtteranceNnet2DecoderThreaded {
   BaseFloat GetRemainingWaveform(Vector<BaseFloat> *waveform_out) const;
 
   ~SingleUtteranceNnet2DecoderThreaded();
- private:
+
+  void GetGmmAdaptationState(OnlineGmmAdaptationState *adaptation_state);
+
+private:
 
   // This function will instruct all threads to abort operation as soon as they
   // can safely do so, by calling SetAbort() in the threads
@@ -422,6 +452,20 @@ class SingleUtteranceNnet2DecoderThreaded {
   // be a coding error, malloc failure-- something we should never encounter.
   bool error_;
 
+  const OnlineGmmDecodingModels &models_;
+  const OnlineGmmAdaptationState &gmm_adaptation_state_;
+  const OnlineGmmAdaptationState &gmm_orig_adaptation_state_;
+
+  void EstimateFmllr(bool end_of_utterance);
+
+  bool GetGaussianPosteriors(bool end_of_utterance, GaussPost *gpost);
+
+  std::vector<int32> silence_phones_; // sorted, unique list of silence phones,
+                                      // derived from config_
+
+  /// Returns true if we already have an fMLLR transform.  The user will
+  /// already know this; the call is for convenience.
+  bool HaveTransform();
 };
 
 
