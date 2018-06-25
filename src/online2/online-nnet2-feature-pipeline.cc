@@ -87,6 +87,20 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
   } else {
       use_lda = false;
   }
+
+  if (config.cmvn_config != "") {
+      apply_cmvn = true;
+      ReadConfigFromFile(config.cmvn_config, &cmvn_opts);
+  } else {
+      apply_cmvn = false;
+  }
+
+  if (config.global_cmvn_stats_rxfilename != "") {
+      apply_cmvn = true;
+      ReadKaldiObject(config.global_cmvn_stats_rxfilename, &global_cmvn_stats_);
+  } else {
+      apply_cmvn = false;
+  }
 }
 
 OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
@@ -103,13 +117,30 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   }
   final_feature_ = base_feature_;
 
+  if (info_.apply_cmvn) {
+    KALDI_ASSERT(info.global_cmvn_stats_.NumRows() != 0);
+    if (info_.add_pitch) {
+      int32 global_dim = info.global_cmvn_stats_.NumCols() - 1;
+      int32 dim = base_feature_->Dim();
+      KALDI_ASSERT(global_dim >= dim);
+      if (global_dim > dim) {
+        Matrix<BaseFloat> last_col(info.global_cmvn_stats_.ColRange(global_dim, 1));
+        info.global_cmvn_stats_.Resize(info.global_cmvn_stats_.NumRows(), dim + 1,
+                                      kCopyData);
+        info.global_cmvn_stats_.ColRange(dim, 1).CopyFromMat(last_col);
+      }
+    }
+    Matrix<double> global_cmvn_stats_dbl(info.global_cmvn_stats_);
+    OnlineCmvnState initial_state(global_cmvn_stats_dbl);
+    cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
+    final_feature_ = cmvn_;
+  }
+
   if (info_.add_pitch) {
     pitch_ = new OnlinePitchFeature(info_.pitch_opts);
     pitch_feature_ = new OnlineProcessPitch(info_.pitch_process_opts,
                                             pitch_);
-//    TODO: Add CMVN
-//    cmvn_ = new OnlineCmvn(config_.cmvn_opts, initial_state, base_feature_); see online-feature-pipeline.cc
-    feature_plus_optional_pitch_ = new OnlineAppendFeature(base_feature_,
+    feature_plus_optional_pitch_ = new OnlineAppendFeature(final_feature_,
                                                            pitch_feature_);
     final_feature_ = feature_plus_optional_pitch_;
   } else {
@@ -208,6 +239,9 @@ OnlineNnet2FeaturePipeline::~OnlineNnet2FeaturePipeline() {
   // of the pointers below will be non-NULL.
   // Some of the online-feature pointers are just copies of other pointers,
   // and we do have to avoid deleting them in those cases.
+  delete fmllr_;
+  delete lda_;
+  delete splice_;
   if (final_feature_ != feature_plus_optional_pitch_)
     delete final_feature_;
   delete ivector_feature_;
@@ -215,6 +249,7 @@ OnlineNnet2FeaturePipeline::~OnlineNnet2FeaturePipeline() {
     delete feature_plus_optional_pitch_;
   delete pitch_feature_;
   delete pitch_;
+  delete cmvn_;
   delete base_feature_;
 }
 
@@ -243,14 +278,13 @@ void OnlineNnet2FeaturePipeline::GetAsMatrix(Matrix<BaseFloat> *feats) {
 }
 
 void OnlineNnet2FeaturePipeline::GetCmvnState(OnlineCmvnState *cmvn_state) {
-// TODO: store CMVN state
-//  int32 frame = cmvn_->NumFramesReady() - 1;
-    // the following call will crash if no frames are ready.
-//  cmvn_->GetState(frame, cmvn_state);
+  int32 frame = cmvn_->NumFramesReady() - 1;
+  // the following call will crash if no frames are ready.
+  cmvn_->GetState(frame, cmvn_state);
 }
 
 void OnlineNnet2FeaturePipeline::FreezeCmvn() {
-    //TODO: cmvn_->Freeze(cmvn_->NumFramesReady() - 1);
+  cmvn_->Freeze(cmvn_->NumFramesReady() - 1);
 }
 
 BaseFloat OnlineNnet2FeaturePipelineInfo::FrameShiftInSeconds() const {

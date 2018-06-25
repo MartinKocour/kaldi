@@ -89,6 +89,11 @@ struct OnlineNnet2FeaturePipelineConfig {
   // Splice config
   std::string splice_config_rxfilename;
 
+  // CMVN config
+  std::string cmvn_config;
+  // Global cmvn stats
+  std::string global_cmvn_stats_rxfilename;
+
   // Config that relates to how we weight silence for (ivector) adaptation
   // this is registered directly to the command line as you might want to
   // play with it in test time.
@@ -120,6 +125,11 @@ struct OnlineNnet2FeaturePipelineConfig {
     opts->Register("splice-config", &splice_config_rxfilename, "Configuration file "
                    "for frame splicing (--left-context and --right-context "
                    "options)");
+    opts->Register("cmvn-config", &cmvn_config, "Configuration class "
+                   "file for online CMVN features (e.g. conf/online_cmvn.conf)");
+    opts->Register("global-cmvn-stats", &global_cmvn_stats_rxfilename,
+                   "(Extended) filename for global CMVN stats, e.g. obtained "
+                   "from 'matrix-sum scp:data/train/cmvn.scp -'");
     silence_weighting_config.RegisterWithPrefix("ivector-silence-weighting", opts);
   }
 };
@@ -166,6 +176,10 @@ struct OnlineNnet2FeaturePipelineInfo {
 
   bool splice_feats;
   OnlineSpliceOptions splice_opts;
+
+  bool apply_cmvn;
+  OnlineCmvnOptions cmvn_opts;
+  Matrix<BaseFloat> global_cmvn_stats_; // Global CMVN stats.
 
   // Config for weighting silence in iVector adaptation.
   // We declare this outside of ivector_extractor_info... it was
@@ -310,6 +324,8 @@ private:
   OnlineFeatureInterface *fmllr_;
 
   OnlineFeatureInterface* AdaptedFeature() const;
+
+  OnlineCmvn *cmvn_;
 };
 
 
