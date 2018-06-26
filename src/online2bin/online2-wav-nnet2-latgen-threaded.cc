@@ -135,7 +135,10 @@ int main(int argc, char *argv[]) {
     feature_config.Register(&po);
     nnet2_decoding_config.Register(&po);
     endpoint_config.Register(&po);
-    gmm_decode_config.Register(&po);
+    {
+        ParseOptions gmm_po("gmm", &po);
+        gmm_decode_config.Register(&gmm_po);
+    }
     
     po.Read(argc, argv);
     
