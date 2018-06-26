@@ -104,6 +104,7 @@ int main(int argc, char *argv[]) {
     // as well as the basic features.
     OnlineNnet2FeaturePipelineConfig feature_config;  
     OnlineNnet2DecodingThreadedConfig nnet2_decoding_config;
+    OnlineGmmDecodingConfig gmm_decode_config;
     
     BaseFloat chunk_length_secs = 0.05;
     bool do_endpointing = false;
@@ -134,6 +135,7 @@ int main(int argc, char *argv[]) {
     feature_config.Register(&po);
     nnet2_decoding_config.Register(&po);
     endpoint_config.Register(&po);
+    gmm_decode_config.Register(&po);
     
     po.Read(argc, argv);
     
@@ -149,6 +151,7 @@ int main(int argc, char *argv[]) {
         clat_wspecifier = po.GetArg(5);
     
     OnlineNnet2FeaturePipelineInfo feature_info(feature_config);
+    OnlineGmmDecodingModels gmm_models(gmm_decode_config);
 
     if (modify_ivector_config) {
       feature_info.ivector_extractor_info.use_most_recent_ivector = true;
@@ -188,6 +191,7 @@ int main(int argc, char *argv[]) {
       const std::vector<std::string> &uttlist = spk2utt_reader.Value();
       OnlineIvectorExtractorAdaptationState adaptation_state(
           feature_info.ivector_extractor_info);
+      OnlineGmmAdaptationState gmmAdaptationState;
       for (size_t i = 0; i < uttlist.size(); i++) {
         std::string utt = uttlist[i];
         if (!wav_reader.HasKey(utt)) {
@@ -202,8 +206,8 @@ int main(int argc, char *argv[]) {
 
         
         SingleUtteranceNnet2DecoderThreaded decoder(
-            nnet2_decoding_config, trans_model, am_nnet,
-            *decode_fst, feature_info, adaptation_state);
+            nnet2_decoding_config, trans_model, am_nnet, *decode_fst,
+            feature_info, adaptation_state, gmmAdaptationState, gmm_models);
         
         OnlineTimer decoding_timer(utt);
         

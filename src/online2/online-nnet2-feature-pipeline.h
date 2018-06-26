@@ -326,6 +326,7 @@ private:
   OnlineFeatureInterface* AdaptedFeature() const;
 
   OnlineCmvn *cmvn_;
+  Matrix<BaseFloat> global_cmvn_stats_; // Global CMVN stats.
 };
 
 

@@ -105,7 +105,7 @@ OnlineNnet2FeaturePipelineInfo::OnlineNnet2FeaturePipelineInfo(
 
 OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     const OnlineNnet2FeaturePipelineInfo &info):
-    info_(info) {
+    info_(info), global_cmvn_stats_(info.global_cmvn_stats_) {
   if (info_.feature_type == "mfcc") {
     base_feature_ = new OnlineMfcc(info_.mfcc_opts);
   } else if (info_.feature_type == "plp") {
@@ -118,19 +118,19 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   final_feature_ = base_feature_;
 
   if (info_.apply_cmvn) {
-    KALDI_ASSERT(info.global_cmvn_stats_.NumRows() != 0);
+    KALDI_ASSERT(global_cmvn_stats_.NumRows() != 0);
     if (info_.add_pitch) {
-      int32 global_dim = info.global_cmvn_stats_.NumCols() - 1;
+      int32 global_dim = global_cmvn_stats_.NumCols() - 1;
       int32 dim = base_feature_->Dim();
       KALDI_ASSERT(global_dim >= dim);
       if (global_dim > dim) {
-        Matrix<BaseFloat> last_col(info.global_cmvn_stats_.ColRange(global_dim, 1));
-        info.global_cmvn_stats_.Resize(info.global_cmvn_stats_.NumRows(), dim + 1,
+        Matrix<BaseFloat> last_col(global_cmvn_stats_.ColRange(global_dim, 1));
+        global_cmvn_stats_.Resize(global_cmvn_stats_.NumRows(), dim + 1,
                                       kCopyData);
-        info.global_cmvn_stats_.ColRange(dim, 1).CopyFromMat(last_col);
+        global_cmvn_stats_.ColRange(dim, 1).CopyFromMat(last_col);
       }
     }
-    Matrix<double> global_cmvn_stats_dbl(info.global_cmvn_stats_);
+    Matrix<double> global_cmvn_stats_dbl(global_cmvn_stats_);
     OnlineCmvnState initial_state(global_cmvn_stats_dbl);
     cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
     final_feature_ = cmvn_;
@@ -150,14 +150,14 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   }
 
   if (info_.splice_feats) {
-    splice_ = new OnlineSpliceFrames(info.splice_opts, final_feature_);
+    splice_ = new OnlineSpliceFrames(info_.splice_opts, final_feature_);
     final_feature_ = splice_;
   } else {
     splice_ = NULL;
   }
 
-  if (info.use_lda) {
-    lda_ = new OnlineTransform(info.lda_mat_, final_feature_);
+  if (info_.use_lda) {
+    lda_ = new OnlineTransform(info_.lda_mat_, final_feature_);
     final_feature_ = lda_;
   } else {
     lda_ = NULL;
