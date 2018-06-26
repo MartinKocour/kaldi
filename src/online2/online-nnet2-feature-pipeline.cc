@@ -116,6 +116,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     KALDI_ERR << "Code error: invalid feature type " << info_.feature_type;
   }
   final_feature_ = base_feature_;
+  KALDI_LOG << "Base feature dim: " << base_feature_->Dim();
 
   if (info_.apply_cmvn) {
     KALDI_ASSERT(global_cmvn_stats_.NumRows() != 0);
@@ -134,6 +135,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     OnlineCmvnState initial_state(global_cmvn_stats_dbl);
     cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
     final_feature_ = cmvn_;
+    KALDI_LOG << "CMVN feature dim: " << cmvn_->Dim();
   }
 
   if (info_.add_pitch) {
@@ -143,6 +145,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     feature_plus_optional_pitch_ = new OnlineAppendFeature(final_feature_,
                                                            pitch_feature_);
     final_feature_ = feature_plus_optional_pitch_;
+    KALDI_LOG << "With pitch feature dim: " << feature_plus_optional_pitch_->Dim();
   } else {
     pitch_ = NULL;
     pitch_feature_ = NULL;
@@ -152,6 +155,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   if (info_.splice_feats) {
     splice_ = new OnlineSpliceFrames(info_.splice_opts, final_feature_);
     final_feature_ = splice_;
+    KALDI_LOG << "With splicing feature dim: " << splice_->Dim();
   } else {
     splice_ = NULL;
   }
@@ -159,6 +163,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   if (info_.use_lda) {
     lda_ = new OnlineTransform(info_.lda_mat_, final_feature_);
     final_feature_ = lda_;
+    KALDI_LOG << "With lda feat dim: " << lda_->Dim();
   } else {
     lda_ = NULL;
   }
