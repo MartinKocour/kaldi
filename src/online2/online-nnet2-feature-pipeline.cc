@@ -134,7 +134,6 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     OnlineCmvnState initial_state(global_cmvn_stats_dbl);
     cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
     final_feature_ = cmvn_;
-    KALDI_LOG << "CMVN feature dim: " << cmvn_->Dim();
   } else {
       cmvn_ = NULL;
   }
