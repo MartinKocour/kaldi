@@ -176,6 +176,7 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   } else {
     ivector_feature_ = NULL;
   }
+  fmllr_ = NULL;
   dim_ = final_feature_->Dim();
 }
 
