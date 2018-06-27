@@ -103,6 +103,7 @@ int main(int argc, char *argv[]) {
     // as well as the basic features.
     OnlineNnet2FeaturePipelineConfig feature_config;
     OnlineNnet2DecodingConfig nnet2_decoding_config;
+    OnlineGmmDecodingConfig gmm_decoding_config;
 
     BaseFloat chunk_length_secs = 0.05;
     bool do_endpointing = false;
@@ -130,6 +131,10 @@ int main(int argc, char *argv[]) {
     feature_config.Register(&po);
     nnet2_decoding_config.Register(&po);
     endpoint_config.Register(&po);
+    {
+      ParseOptions gmm_po("gmm", &po);
+      gmm_decoding_config.Register(&gmm_po);
+    }
 
     po.Read(argc, argv);
 
@@ -145,6 +150,7 @@ int main(int argc, char *argv[]) {
         clat_wspecifier = po.GetArg(5);
 
     OnlineNnet2FeaturePipelineInfo feature_info(feature_config);
+    OnlineGmmDecodingModels gmm_models(gmm_decoding_config);
 
     if (!online) {
       feature_info.ivector_extractor_info.use_most_recent_ivector = true;
@@ -184,6 +190,7 @@ int main(int argc, char *argv[]) {
       const std::vector<std::string> &uttlist = spk2utt_reader.Value();
       OnlineIvectorExtractorAdaptationState adaptation_state(
           feature_info.ivector_extractor_info);
+      OnlineGmmAdaptationState gmm_adaptation_state;
       for (size_t i = 0; i < uttlist.size(); i++) {
         std::string utt = uttlist[i];
         if (!wav_reader.HasKey(utt)) {
@@ -198,6 +205,7 @@ int main(int argc, char *argv[]) {
 
         OnlineNnet2FeaturePipeline feature_pipeline(feature_info);
         feature_pipeline.SetAdaptationState(adaptation_state);
+        feature_pipeline.SetTransform(gmm_adaptation_state.transform);
 
         OnlineSilenceWeighting silence_weighting(
             trans_model,
@@ -207,7 +215,9 @@ int main(int argc, char *argv[]) {
                                             trans_model,
                                             nnet,
                                             *decode_fst,
-                                            &feature_pipeline);
+                                            &feature_pipeline,
+                                            gmm_adaptation_state,
+                                            gmm_models);
         OnlineTimer decoding_timer(utt);
 
         BaseFloat samp_freq = wave_data.SampFreq();

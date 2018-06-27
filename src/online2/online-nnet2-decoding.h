@@ -34,6 +34,8 @@
 #include "decoder/lattice-faster-online-decoder.h"
 #include "hmm/transition-model.h"
 #include "hmm/posterior.h"
+#include "online-gmm-decoding.h"
+#include "online-nnet2-feature-pipeline.h"
 
 namespace kaldi {
 /// @addtogroup  onlinedecoding OnlineDecoding
@@ -48,15 +50,41 @@ namespace kaldi {
 // requires other configs that it creates separately, and which are not included
 // here: namely, OnlineNnet2FeaturePipelineConfig and OnlineEndpointConfig.
 struct OnlineNnet2DecodingConfig {
-  
+  BaseFloat fmllr_lattice_beam;
+
+  BasisFmllrOptions basis_opts; // options for basis-fMLLR adaptation.
+
   LatticeFasterDecoderConfig decoder_opts;
   nnet2::DecodableNnet2OnlineOptions decodable_opts;
+
+  OnlineGmmDecodingAdaptationPolicyConfig adaptation_policy_opts;
+
+  std::string silence_phones;
+  BaseFloat silence_weight;
   
-  OnlineNnet2DecodingConfig() {  decodable_opts.acoustic_scale = 0.1; }
+  OnlineNnet2DecodingConfig() {
+    decodable_opts.acoustic_scale = 0.1;
+    fmllr_lattice_beam = 3.0;
+    silence_weight = 0.1;
+  }
   
   void Register(OptionsItf *opts) {
     decoder_opts.Register(opts);
     decodable_opts.Register(opts);
+    { // register basis_opts with prefix, there are getting to be too many
+      // options.
+      ParseOptions basis_po("basis", opts);
+      basis_opts.Register(&basis_po);
+    }
+    adaptation_policy_opts.Register(opts);
+    opts->Register("silence-phones", &silence_phones,
+                 "Colon-separated list of integer ids of silence phones, e.g. "
+                 "1:2:3 (affects adaptation).");
+    opts->Register("silence-weight", &silence_weight,
+                 "Weight applied to silence frames for fMLLR estimation (if "
+                 "--silence-phones option is supplied)");
+    opts->Register("fmllr-lattice-beam", &fmllr_lattice_beam, "Beam used in "
+                 "pruning lattices for fMLLR estimation");
   }
 };
 
@@ -72,7 +100,9 @@ class SingleUtteranceNnet2Decoder {
                               const TransitionModel &tmodel,
                               const nnet2::AmNnet &model,
                               const fst::Fst<fst::StdArc> &fst,
-                              OnlineFeatureInterface *feature_pipeline);
+                              OnlineNnet2FeaturePipeline *feature_pipeline,
+                              const OnlineGmmAdaptationState &gmm_adaptation_state,
+                              const OnlineGmmDecodingModels &models);
   
   /// advance the decoding as far as we can.
   void AdvanceDecoding();
@@ -107,18 +137,34 @@ class SingleUtteranceNnet2Decoder {
   const LatticeFasterOnlineDecoder &Decoder() const { return decoder_; }
   
   ~SingleUtteranceNnet2Decoder() { }
+
+  void GetGmmAdaptationState(OnlineGmmAdaptationState *adaptation_state);
  private:
 
   OnlineNnet2DecodingConfig config_;
 
-  OnlineFeatureInterface *feature_pipeline_;
+  OnlineNnet2FeaturePipeline *feature_pipeline_;
 
   const TransitionModel &tmodel_;
   
   nnet2::DecodableNnet2Online decodable_;
   
   LatticeFasterOnlineDecoder decoder_;
-  
+
+  const OnlineGmmDecodingModels &models_;
+  const OnlineGmmAdaptationState &gmm_adaptation_state_;
+  const OnlineGmmAdaptationState &gmm_orig_adaptation_state_;
+
+  void EstimateFmllr(bool end_of_utterance);
+
+  bool GetGaussianPosteriors(bool end_of_utterance, GaussPost *gpost);
+
+  std::vector<int32> silence_phones_; // sorted, unique list of silence phones,
+                                      // derived from config_
+
+  /// Returns true if we already have an fMLLR transform.  The user will
+  /// already know this; the call is for convenience.
+  bool HaveTransform();
 };
 
   
