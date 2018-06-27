@@ -136,6 +136,8 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
     cmvn_ = new OnlineCmvn(info_.cmvn_opts, initial_state, base_feature_);
     final_feature_ = cmvn_;
     KALDI_LOG << "CMVN feature dim: " << cmvn_->Dim();
+  } else {
+      cmvn_ = NULL;
   }
 
   if (info_.add_pitch) {
@@ -171,10 +173,12 @@ OnlineNnet2FeaturePipeline::OnlineNnet2FeaturePipeline(
   if (info_.use_ivectors) {
     ivector_feature_ = new OnlineIvectorFeature(info_.ivector_extractor_info,
                                                 base_feature_);
-    final_feature_ = new OnlineAppendFeature(feature_plus_optional_pitch_,
+    ivector_append_feature_ = new OnlineAppendFeature(feature_plus_optional_pitch_,
                                              ivector_feature_);
+    final_feature_ = ivector_append_feature_;
   } else {
     ivector_feature_ = NULL;
+    ivector_append_feature_ = NULL;
   }
   fmllr_ = NULL;
   dim_ = final_feature_->Dim();
@@ -248,8 +252,7 @@ OnlineNnet2FeaturePipeline::~OnlineNnet2FeaturePipeline() {
   delete fmllr_;
   delete lda_;
   delete splice_;
-  if (final_feature_ != feature_plus_optional_pitch_)
-    delete final_feature_;
+  delete ivector_append_feature_;
   delete ivector_feature_;
   if (feature_plus_optional_pitch_ != base_feature_)
     delete feature_plus_optional_pitch_;
@@ -257,6 +260,7 @@ OnlineNnet2FeaturePipeline::~OnlineNnet2FeaturePipeline() {
   delete pitch_;
   delete cmvn_;
   delete base_feature_;
+  final_feature_ = NULL;
 }
 
 void OnlineNnet2FeaturePipeline::AcceptWaveform(

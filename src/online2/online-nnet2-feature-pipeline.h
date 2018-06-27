@@ -323,10 +323,11 @@ private:
 
   OnlineFeatureInterface *fmllr_;
 
-  OnlineFeatureInterface* AdaptedFeature() const;
+  OnlineAppendFeature *ivector_append_feature_;
 
-  OnlineCmvn *cmvn_;
-  Matrix<BaseFloat> global_cmvn_stats_; // Global CMVN stats.
+  OnlineFeatureInterface* AdaptedFeature() const;
+    OnlineCmvn *cmvn_;
+    Matrix<BaseFloat> global_cmvn_stats_; // Global CMVN stats.
 };
 
 
