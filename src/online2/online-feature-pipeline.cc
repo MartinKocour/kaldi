@@ -166,7 +166,6 @@ void OnlineFeaturePipeline::Init() {
   } else {
     KALDI_ERR << "Code error: invalid feature type " << config_.feature_type;
   }
-  KALDI_LOG << "Base feat dim: " << base_feature_->Dim();
 
   {
     KALDI_ASSERT(global_cmvn_stats_.NumRows() != 0);
@@ -184,7 +183,6 @@ void OnlineFeaturePipeline::Init() {
     Matrix<double> global_cmvn_stats_dbl(global_cmvn_stats_);
     OnlineCmvnState initial_state(global_cmvn_stats_dbl);
     cmvn_ = new OnlineCmvn(config_.cmvn_opts, initial_state, base_feature_);
-    KALDI_LOG << "CMVN feat dim: " << cmvn_->Dim();
   }
 
   if (config_.add_pitch) {
@@ -192,7 +190,6 @@ void OnlineFeaturePipeline::Init() {
     pitch_feature_ = new OnlineProcessPitch(config_.pitch_process_opts,
                                             pitch_);
     feature_ = new OnlineAppendFeature(cmvn_, pitch_feature_);
-    KALDI_LOG << "With pitch feat dim: " << feature_->Dim();
   } else {
     pitch_ = NULL;
     pitch_feature_ = NULL;
@@ -205,7 +202,6 @@ void OnlineFeaturePipeline::Init() {
   } else if (config_.splice_feats) {
     splice_or_delta_ = new OnlineSpliceFrames(config_.splice_opts,
                                               feature_);
-    KALDI_LOG << "Spliced feat dim: " << splice_or_delta_->Dim();
   } else if (config_.add_deltas) {
     splice_or_delta_ = new OnlineDeltaFeature(config_.delta_opts,
                                               feature_);
@@ -217,7 +213,6 @@ void OnlineFeaturePipeline::Init() {
     lda_ = new OnlineTransform(lda_mat_,
                                (splice_or_delta_ != NULL ?
                                 splice_or_delta_ : feature_));
-    KALDI_LOG << "LDA feat dim: " << lda_->Dim();
   } else {
     lda_ = NULL;
   }
