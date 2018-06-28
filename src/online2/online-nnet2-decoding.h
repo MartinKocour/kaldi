@@ -139,6 +139,8 @@ class SingleUtteranceNnet2Decoder {
   ~SingleUtteranceNnet2Decoder() { }
 
   void GetGmmAdaptationState(OnlineGmmAdaptationState *adaptation_state);
+
+  void EstimateFmllr(bool end_of_utterance);
  private:
 
   OnlineNnet2DecodingConfig config_;
@@ -154,8 +156,6 @@ class SingleUtteranceNnet2Decoder {
   const OnlineGmmDecodingModels &models_;
   const OnlineGmmAdaptationState &gmm_adaptation_state_;
   const OnlineGmmAdaptationState &gmm_orig_adaptation_state_;
-
-  void EstimateFmllr(bool end_of_utterance);
 
   bool GetGaussianPosteriors(bool end_of_utterance, GaussPost *gpost);
 

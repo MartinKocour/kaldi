@@ -264,8 +264,10 @@ int main(int argc, char *argv[]) {
         }
         decoder.FinalizeDecoding();
 
-        CompactLattice clat;
         bool end_of_utterance = true;
+        decoder.EstimateFmllr(end_of_utterance);
+
+        CompactLattice clat;
         decoder.GetLattice(end_of_utterance, &clat);
 
         GetDiagnosticsAndPrintOutput(utt, word_syms, clat,
@@ -276,6 +278,7 @@ int main(int argc, char *argv[]) {
         // In an application you might avoid updating the adaptation state if
         // you felt the utterance had low confidence.  See lat/confidence.h
         feature_pipeline.GetAdaptationState(&adaptation_state);
+        decoder.GetGmmAdaptationState(&gmm_adaptation_state);
 
         // we want to output the lattice with un-scaled acoustics.
         BaseFloat inv_acoustic_scale =
