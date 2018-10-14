@@ -19,6 +19,7 @@ cleanup=true
 nj=4
 graph_opts=
 segmentation_opts=
+align_opts=
 
 . ./path.sh
 . utils/parse_options.sh
@@ -108,7 +109,7 @@ fi
 
 if [ $stage -le 3 ]; then
   echo "$0: Doing oracle alignment of lattices..."
-  steps/cleanup/lattice_oracle_align.sh \
+  steps/cleanup/lattice_oracle_align.sh $align_opts \
     --cmd "$cmd" $data $lang $dir/lats $dir/lattice_oracle
 fi
 
