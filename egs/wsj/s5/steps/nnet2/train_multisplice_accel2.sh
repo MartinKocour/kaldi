@@ -152,7 +152,8 @@ if [ $# != 4 ]; then
   echo "  --align-use-gpu (yes/no)                         # specify is gpu is to be used for realignment"
   echo "  --num-jobs-align <#njobs|30>                     # Number of jobs to perform realignment"
   echo "  --stage <stage|-4>                               # Used to run a partially-completed training process from somewhere in"
-  echo "                                                   # the middle."
+  echo "                                                   # the middle"
+  echo "  --verbose <#leve|0>                              # Verbose level."
 
 
   exit 1;
@@ -514,7 +515,7 @@ while [ $x -lt $num_iters ]; do
 
         $cmd $parallel_opts $dir/log/train.$x.$n.log \
           nnet-train$parallel_suffix $parallel_train_opts \
-          --minibatch-size=$this_minibatch_size --srand=$x "$mdl" \
+          --minibatch-size=$this_minibatch_size --verbose $verbose --srand=$x "$mdl" \
           "ark,bg:nnet-copy-egs --frame=$frame ark:$cur_egs_dir/egs.$archive.ark ark:-|nnet-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$x ark:- ark:-|" \
           $dir/$[$x+1].$n.mdl || touch $dir/.error &
       done
