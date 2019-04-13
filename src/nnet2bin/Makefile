@@ -24,7 +24,8 @@ BINFILES = nnet-am-info nnet-init \
    nnet-modify-learning-rates nnet-normalize-stddev  \
    nnet-get-weighted-egs nnet-adjust-priors \
    cuda-compiled nnet-replace-last-layers nnet-am-switch-preconditioning \
-   nnet1-to-raw-nnet raw-nnet-copy nnet-relabel-egs nnet-am-reinitialize
+   nnet1-to-raw-nnet raw-nnet-copy nnet-relabel-egs nnet-am-reinitialize \
+   nnet-am-compute-fisher
 
 OBJFILES =
 
