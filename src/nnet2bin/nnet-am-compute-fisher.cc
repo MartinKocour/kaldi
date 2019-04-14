@@ -24,6 +24,39 @@
 #include "nnet2/am-nnet.h"
 #include "hmm/hmm-topology.h"
 
+namespace kaldi {
+    template<typename Real>
+    void matrix_delete(Matrix<Real> & M, std::vector<MatrixIndexT> indices, int32 axis) {
+        if (axis == 0) { // delete rows
+            M.Transpose();
+            matrix_delete(M, indices, 1);
+            M.Transpose();
+        } else { // delete cols
+            std::sort(indices.begin(), indices.end());
+            std::vector<MatrixIndexT> copy_indices(M.NumCols());
+            MatrixIndexT last = -1;
+            for (int i = 0; i < M.NumCols(); i++) {
+                bool find = false;
+                for (int j = i; j < M.NumCols(); j++) {
+                    if(j <= last) continue; // j is already in the list
+                    if(std::find(indices.begin(), indices.end(), j) == indices.end()) {
+                        // indices does not contain j, move j-th column to i-th column
+                        copy_indices[i] = j;
+                        last = j;
+                        find = true;
+                        break;
+                    }
+                }
+                if (!find) {
+                    copy_indices[i] = -1; // Zero the i-th column
+                }
+            }
+            Matrix<Real> tmp(M);
+            M.CopyCols(tmp, copy_indices.data());
+            M.Resize(M.NumRows(), M.NumCols() - indices.size(), kCopyData);
+        }
+    }
+}
 
 int main(int argc, char *argv[]) {
     try {
@@ -104,7 +137,7 @@ int main(int argc, char *argv[]) {
             int32 pdf = trans_model.TransitionIdToPdf(trans_id);
             int32 phone = trans_model.TransitionIdToPhone(trans_id);
             if (std::find(filter_phones_.begin(), filter_phones_.end(), phone) != filter_phones_.end()
-            && std::find(filter_pdfs_.begin(), filter_pdfs_.end(), pdf) == filter_pdfs_.end()) {
+                && std::find(filter_pdfs_.begin(), filter_pdfs_.end(), pdf) == filter_pdfs_.end()) {
                 filter_pdfs_.push_back(pdf);
             }
         }
@@ -120,8 +153,9 @@ int main(int argc, char *argv[]) {
         BaseFloatCuMatrixWriter writer(features_or_loglikes_wspecifier);
         BaseFloatCuMatrixWriter fisher_writer(fisher_wspecifier);
 
-        CuMatrix<BaseFloat> acc(nnet.OutputDim(), nnet.OutputDim());
-        CuVector<BaseFloat> mean(nnet.OutputDim());
+        MatrixIndexT filtered_dim = nnet.OutputDim() - filter_pdfs_.size();
+        CuMatrix<BaseFloat> acc(filtered_dim, filtered_dim);
+        CuVector<BaseFloat> mean(filtered_dim);
 
         for (; !feature_reader.Done();  feature_reader.Next()) {
             std::string utt = feature_reader.Key();
@@ -167,10 +201,10 @@ int main(int argc, char *argv[]) {
             }
 
             if (filter_pdfs_.size() > 0) {
-                for (int i = 0; i < filter_pdfs_.size(); i++) {
-                    int32 pdf = filter_pdfs_[i];
-                    cu_output.Range(0, output_frames, pdf, 1).SetZero();
-                }
+                Matrix<BaseFloat> filtered_output(cu_output);
+                matrix_delete(filtered_output, filter_pdfs_, 1);
+                cu_output.Resize(output_frames, filtered_output.NumCols());
+                cu_output.CopyFromMat(filtered_output);
             }
 
             for (int32 i = 0; i < cu_output.NumRows(); i++) {
@@ -205,5 +239,3 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 }
-
-
