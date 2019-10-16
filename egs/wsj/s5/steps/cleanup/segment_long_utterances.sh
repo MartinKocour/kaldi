@@ -203,6 +203,7 @@ if [ $stage -le 3 ]; then
 
   cp $lang/words.txt $graph_dir
   cp -r $lang/phones $graph_dir
+  cp $lang/phones.txt $graph_dir
   [ -f $dir/graphs/num_pdfs ] && cp $dir/graphs/num_pdfs $graph_dir/
 fi
 

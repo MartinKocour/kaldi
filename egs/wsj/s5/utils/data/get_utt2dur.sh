@@ -81,11 +81,11 @@ elif [ -f $data/wav.scp ]; then
     fi
 
     read_entire_file=false
-    if grep -q 'sox.*speed' $data/wav.scp; then
+    if grep -q 'sox.*speed' $data/wav.scp || grep -q ".*|\s*$" $data/wav.scp; then
       read_entire_file=true
       echo "$0: reading from the entire wav file to fix the problem caused by sox commands with speed perturbation. It is going to be slow."
-      echo "... It is much faster if you call get_utt2dur.sh *before* doing the speed perturbation via e.g. perturb_data_dir_speed.sh or "
-      echo "... perturb_data_dir_speed_3way.sh."
+      echo "... Either doing speed perturbation or reading from stream. Note that it is much faster if you call get_utt2dur.sh"
+      echo "... *before* doing the speed perturbation via e.g. perturb_data_dir_speed.sh or perturb_data_dir_speed_3way.sh."
     fi
 
 
