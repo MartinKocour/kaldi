@@ -24,6 +24,7 @@
 #include "hmm/transition-model.h"
 #include "fstext/fstext-lib.h"
 #include "decoder/training-graph-compiler.h"
+#include "fst/fst.h"
 
 
 int main(int argc, char *argv[]) {
