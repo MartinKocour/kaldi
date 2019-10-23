@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
             VectorFst<StdArc> reference_fst;
 
             MakeLinearAcceptor(transcript, &reference_fst);
-            if (reference_fst.Start() == kNoStateId) {
+            if (reference_fst.Start() == fst::kNoStateId) {
                 reference_fst.DeleteStates();  // Just make it empty.
             }
             if (reference_fst.Start() != fst::kNoStateId) {
