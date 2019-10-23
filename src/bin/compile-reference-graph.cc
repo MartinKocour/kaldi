@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
             const std::vector<int32> &transcript = transcript_reader.Value();
 
             VectorFst<StdArc> edit_fst;
-            MakeEditTransducer(word_syms, transcript, &edit_fst);
+            MakeEditTransducer(transcript, word_syms, &edit_fst);
 
             VectorFst<StdArc> reference_fst;
             MakeReferenceTransducer(transcript, &reference_fst);
