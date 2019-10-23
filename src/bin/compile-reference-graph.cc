@@ -61,7 +61,8 @@ int main(int argc, char *argv[]) {
             const std::vector<int32> &transcript = transcript_reader.Value();
             VectorFst<StdArc> reference_fst;
 
-            if (!MakeLinearAcceptor(transcript, &reference_fst)) {
+            MakeLinearAcceptor(transcript, &reference_fst);
+            if (reference_fst.Start() == kNoStateId) {
                 reference_fst.DeleteStates();  // Just make it empty.
             }
             if (reference_fst.Start() != fst::kNoStateId) {
