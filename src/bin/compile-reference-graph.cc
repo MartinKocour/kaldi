@@ -1,6 +1,8 @@
-// bin/compile-train-graphs.cc
+// bin/compile-reference-graph.cc
 
-// Copyright 2019  Brno University of Technology (author: Martin Kocour)
+// Copyright 2009-2012  Microsoft Corporation
+//           2012-2015  Johns Hopkins University (Author: Daniel Povey)
+//           2019       Brno University of Technology (author: Martin Kocour)
 
 // See ../../COPYING for clarification regarding multiple authors
 //
