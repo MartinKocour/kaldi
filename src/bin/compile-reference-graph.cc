@@ -47,7 +47,6 @@ void MakeEditTransducer(const std::vector<int32> &words, fst::MutableFst<Arc> *o
             } else {
                 arc = Arc(words[i], words[j], Weight::Zero(), cur_state);
             }
-            Arc arc(words[i], words[j], Weight::One(), cur_state);
             ofst->AddArc(cur_state, arc);
         }
     }
