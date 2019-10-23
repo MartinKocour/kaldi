@@ -38,17 +38,17 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
     StateId cur_state = ofst->AddState();
     ofst->SetStart(cur_state);
     int32 eps = 0;
-    for (size_t i = 0; i < words.size(); i++) {
-        Arc arc1(eps, words[i], Weight::Zero(), cur_state);
-        Arc arc2(words[i], eps, Weight::Zero(), cur_state);
+    for (size_t i = 0; i < uniq_labels.size(); i++) {
+        Arc arc1(eps, uniq_labels[i], Weight::Zero(), cur_state);
+        Arc arc2(uniq_labels[i], eps, Weight::Zero(), cur_state);
         ofst->AddArc(cur_state, arc1);
         ofst->AddArc(cur_state, arc2);
-        for (size_t j = 0; j < uniq_labels.size(); j++) {
+        for (size_t j = 0; j < words.size(); j++) {
             Arc arc;
-            if (uniq_labels[j] == words[i]) {
-                arc = Arc(uniq_labels[j], words[i], Weight::One(), cur_state);
+            if (words[j] == uniq_labels[i]) {
+                arc = Arc(uniq_labels[i], words[j], Weight::One(), cur_state);
             } else {
-                arc = Arc(uniq_labels[j], words[i], Weight::Zero(), cur_state);
+                arc = Arc(uniq_labels[i], words[j], Weight::Zero(), cur_state);
             }
             ofst->AddArc(cur_state, arc);
         }
