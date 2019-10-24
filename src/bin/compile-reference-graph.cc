@@ -35,6 +35,8 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
     typedef typename Arc::StateId StateId;
     typedef typename Arc::Weight Weight;
 
+    // We do not create large Edit transducer with N*N arcs, where N=len(words)
+
     std::vector<int32> uniq_labels(trans);
     kaldi::SortAndUniq(&uniq_labels);
 
@@ -70,9 +72,9 @@ void MakeReferenceTransducer(const std::vector<I> &labels, fst::MutableFst<Arc> 
     fst::MakeLinearAcceptor(labels, ofst);
 }
 
-template<class Arc, class I>
-void MakeHypothesisTransducer(const kaldi::CompactLattice &clat, fst::MutableFst<Arc> *ofst) {
-    RemoveAlignmentsFromCompactLattice(&clat);
+template<class Arc>
+void MakeHypothesisTransducer(kaldi::CompactLattice &clat, fst::MutableFst<Arc> *ofst) {
+    fst::RemoveAlignmentsFromCompactLattice(&clat);
     kaldi::Lattice lat;
     ConvertLattice(clat, &lat);
     fst::Project(&lat, fst::PROJECT_OUTPUT); // project on words.
