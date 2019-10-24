@@ -48,6 +48,15 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
             ofst->AddArc(cur_state, arc);
         }
     }
+    int32 eps = 0;
+    for (size_t i = 0; i < words.size(); i++) {
+        if(words[i] == eps) {
+            continue;
+        }
+        Arc arc1(eps, words[j], Weight::Zero(), cur_state);
+        Arc arc2(words[j], eps, Weight::Zero(), cur_state);
+        ofst->AddArc(cur_state, arc);
+    }
     ofst->SetFinal(cur_state, Weight::One());
 }
 
@@ -106,6 +115,24 @@ int main(int argc, char *argv[]) {
 
             VectorFst<StdArc> ref_edit_fst;
             fst::TableCompose(reference_fst, edit_fst, &ref_edit_fst); // TODO add cache
+
+            if (reference_fst.Start() != fst::kNoStateId) {
+                num_succeed++;
+                fst_writer.Write(key, reference_fst);
+            } else {
+                KALDI_WARN << "Empty decoding graph for utterance "
+                           << key;
+                num_fail++;
+            }
+
+            if (edit_fst.Start() != fst::kNoStateId) {
+                num_succeed++;
+                fst_writer.Write(key, edit_fst);
+            } else {
+                KALDI_WARN << "Empty decoding graph for utterance "
+                           << key;
+                num_fail++;
+            }
 
             if (ref_edit_fst.Start() != fst::kNoStateId) {
                 num_succeed++;
