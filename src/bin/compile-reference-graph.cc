@@ -37,12 +37,7 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
     ofst->DeleteStates();
     StateId cur_state = ofst->AddState();
     ofst->SetStart(cur_state);
-    int32 eps = 0;
     for (size_t i = 0; i < uniq_labels.size(); i++) {
-        Arc arc1(eps, uniq_labels[i], Weight::Zero(), cur_state);
-        Arc arc2(uniq_labels[i], eps, Weight::Zero(), cur_state);
-        ofst->AddArc(cur_state, arc1);
-        ofst->AddArc(cur_state, arc2);
         for (size_t j = 0; j < words.size(); j++) {
             Arc arc;
             if (words[j] == uniq_labels[i]) {
@@ -53,7 +48,7 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
             ofst->AddArc(cur_state, arc);
         }
     }
-    ofst->SetFinal(cur_state, Weight::Zero());
+    ofst->SetFinal(cur_state, Weight::One());
 }
 
 template<class Arc, class I>
