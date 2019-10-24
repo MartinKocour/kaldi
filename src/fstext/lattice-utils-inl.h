@@ -283,8 +283,8 @@ void ConvertLatticeToFst(
   fst::CacheOptions cache_opts(true, num_states_cache);
   fst::MapFstOptions mapfst_opts(cache_opts);
   LatticeToStdMapper<Real> mapper;
-  MapFst<ArcTpl<LatticeWeightTpl<Real>, StdArc>,
-  StdToLatticeMapper<Real> > map_fst(ifst, mapper, mapfst_opts);
+  MapFst<ArcTpl<LatticeWeightTpl<Real>>, StdArc,
+  LatticeToStdMapper<Real> > map_fst(ifst, mapper, mapfst_opts);
   *ofst = map_fst;
 }
 
