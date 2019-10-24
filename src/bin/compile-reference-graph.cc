@@ -53,8 +53,8 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
         if(words[i] == eps) {
             continue;
         }
-        Arc arc1(eps, words[j], Weight::Zero(), cur_state);
-        Arc arc2(words[j], eps, Weight::Zero(), cur_state);
+        Arc arc1(eps, words[i], Weight::Zero(), cur_state);
+        Arc arc2(words[i], eps, Weight::Zero(), cur_state);
         ofst->AddArc(cur_state, arc);
     }
     ofst->SetFinal(cur_state, Weight::One());
