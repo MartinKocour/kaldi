@@ -1,5 +1,8 @@
 // bin/compile-reference-graph.cc
 
+// This binary is a part of the implementation of lattice-based SST training approach
+// introduced in ﻿http://arxiv.org/abs/1905.13150 by Joachim Fainberg, et al.
+
 // Copyright 2009-2012  Microsoft Corporation
 //           2012-2015  Johns Hopkins University (Author: Daniel Povey)
 //           2019       Brno University of Technology (author: Martin Kocour)
@@ -25,6 +28,7 @@
 #include "hmm/transition-model.h"
 #include "fstext/fstext-lib.h"
 #include "decoder/training-graph-compiler.h"
+#include "lat/kaldi-lattice.h"
 
 template<class Arc>
 void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32> &words, fst::MutableFst<Arc> *ofst) {
@@ -66,6 +70,15 @@ void MakeReferenceTransducer(const std::vector<I> &labels, fst::MutableFst<Arc> 
     fst::MakeLinearAcceptor(labels, ofst);
 }
 
+template<class Arc, class I>
+void MakeHypothesisTransducer(const kaldi::CompactLattice &clat, fst::MutableFst<Arc> *ofst) {
+    RemoveAlignmentsFromCompactLattice(&clat);
+    kaldi::Lattice lat;
+    ConvertLattice(clat, &lat);
+    fst::Project(&lat, fst::PROJECT_OUTPUT); // project on words.
+    fst::ConvertLatticeToFst(lat, ofst);
+}
+
 int main(int argc, char *argv[]) {
     try {
         using namespace kaldi;
@@ -75,22 +88,23 @@ int main(int argc, char *argv[]) {
         using fst::StdArc;
 
         const char *usage =
-                "Creates FST graphs from transcripts. (Graphs are used in the lattice based SST training)\n"
-                "\n"
-                "Usage: compile-reference-graph [options] <word-rxfilename> <transcripts-rspecifier> <fst-graphs-wspecifier>\n"
-                "e.g. compile-reference-graph 'words.int' 'ark:sym2int.pl --map-oov 1 -f 2- words.txt text|' ark:reference.fsts\n"
-                "\n";
+            "Creates FST graphs from transcripts. (Graphs are used in the lattice based SST training)\n"
+            "\n"
+            "Usage: compile-reference-graph [options] <word-rxfilename> <transcripts-rspecifier> <lattice-rspecifier> <fst-wspecifier>\n"
+            "e.g. compile-reference-graph 'words.int' 'ark:sym2int.pl --map-oov 1 -f 2- words.txt text|' ark:1.lats ark:reference.fsts\n"
+            "\n";
         ParseOptions po(usage);
         po.Read(argc, argv);
 
-        if (po.NumArgs() != 3) {
+        if (po.NumArgs() != 4) {
             po.PrintUsage();
             exit(1);
         }
 
         std::string word_rspecifier = po.GetArg(1);
         std::string transcript_rspecifier = po.GetArg(2);
-        std::string fsts_wspecifier = po.GetArg(3);
+        std::string lats_rspecifier = po.GetArg(3);
+        std::string fsts_wspecifier = po.GetArg(4);
 
         std::vector<int32> word_syms;
         if (!ReadIntegerVectorSimple(word_rspecifier, &word_syms))
@@ -98,6 +112,7 @@ int main(int argc, char *argv[]) {
                       << word_rspecifier;
 
         SequentialInt32VectorReader transcript_reader(transcript_rspecifier);
+        RandomAccessCompactLatticeReader clat_reader(lats_rspecifier);
         TableWriter<fst::VectorFstHolder> fst_writer(fsts_wspecifier);
 
         int num_succeed = 0, num_fail = 0;
@@ -112,10 +127,17 @@ int main(int argc, char *argv[]) {
             VectorFst<StdArc> reference_fst;
             MakeReferenceTransducer(transcript, &reference_fst);
 
+            CompactLattice clat = clat_reader.Value(key);
+            VectorFst<StdArc> hypothesis_fst;
+            MakeHypothesisTransducer(clat, &hypothesis_fst);
+
             //TODO Add checks
 
             VectorFst<StdArc> ref_edit_fst;
             fst::TableCompose(reference_fst, edit_fst, &ref_edit_fst); // TODO add cache
+
+            VectorFst<StdArc> ref_edit_hyp_fst;
+            fst::TableCompose(ref_edit_fst, hypothesis_fst, &ref_edit_hyp_fst);
 
             if (reference_fst.Start() != fst::kNoStateId) {
                 num_succeed++;
@@ -135,9 +157,27 @@ int main(int argc, char *argv[]) {
                 num_fail++;
             }
 
+            if (hypothesis_fst.Start() != fst::kNoStateId) {
+                num_succeed++;
+                fst_writer.Write(key, hypothesis_fst);
+            } else {
+                KALDI_WARN << "Empty decoding graph for utterance "
+                           << key;
+                num_fail++;
+            }
+
             if (ref_edit_fst.Start() != fst::kNoStateId) {
                 num_succeed++;
                 fst_writer.Write(key, ref_edit_fst);
+            } else {
+                KALDI_WARN << "Empty decoding graph for utterance "
+                           << key;
+                num_fail++;
+            }
+
+            if (ref_edit_hyp_fst.Start() != fst::kNoStateId) {
+                num_succeed++;
+                fst_writer.Write(key, ref_edit_hyp_fst);
             } else {
                 KALDI_WARN << "Empty decoding graph for utterance "
                            << key;
