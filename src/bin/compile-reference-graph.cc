@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
             VectorFst<StdArc> edit_fst;
             MakeEditTransducer(transcript, word_syms, &edit_fst);
 
-            if (edit_fst.Start() != fst::kNoStateId) {
+            if (edit_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty edit FST for utterance "
                            << key;
                 num_fail++;
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
             VectorFst<StdArc> reference_fst;
             MakeReferenceTransducer(transcript, &reference_fst);
 
-            if (reference_fst.Start() != fst::kNoStateId) {
+            if (reference_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty transcript FST for utterance "
                            << key;
                 num_fail++;
@@ -166,7 +166,7 @@ int main(int argc, char *argv[]) {
             fst::VectorFst<StdArc> hypothesis_fst;
             MakeHypothesisTransducer(clat, scale, rm_eps, &hypothesis_fst);
 
-            if (hypothesis_fst.Start() != fst::kNoStateId) {
+            if (hypothesis_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty lattice for utterance "
                            << key;
                 num_fail++;
@@ -175,53 +175,27 @@ int main(int argc, char *argv[]) {
 
             VectorFst<StdArc> ref_edit_fst;
             fst::TableCompose(reference_fst, edit_fst, &ref_edit_fst); // TODO add cache
+            fst::OLabelCompare<StdArc> olabel_comp;
+            fst::ArcSort(&ref_edit_fst, olabel_comp);
+
+            if (ref_edit_fst.Start() == fst::kNoStateId) {
+                KALDI_WARN << "Empty composition of transcripts with edit FST for utterance "
+                           << key;
+                num_fail++;
+                continue;
+            }
 
             VectorFst<StdArc> ref_edit_hyp_fst;
-            fst::TableCompose(ref_edit_fst, hypothesis_fst, &ref_edit_hyp_fst);
-
-            if (reference_fst.Start() != fst::kNoStateId) {
-                num_succeed++;
-                fst_writer.Write(key, reference_fst);
-            } else {
-                KALDI_WARN << "Empty decoding graph for utterance "
-                           << key;
-                num_fail++;
-            }
-
-            if (edit_fst.Start() != fst::kNoStateId) {
-                num_succeed++;
-                fst_writer.Write(key, edit_fst);
-            } else {
-                KALDI_WARN << "Empty decoding graph for utterance "
-                           << key;
-                num_fail++;
-            }
-
-            if (hypothesis_fst.Start() != fst::kNoStateId) {
-                num_succeed++;
-                fst_writer.Write(key, hypothesis_fst);
-            } else {
-                KALDI_WARN << "Empty decoding graph for utterance "
-                           << key;
-                num_fail++;
-            }
-
-            if (ref_edit_fst.Start() != fst::kNoStateId) {
-                num_succeed++;
-                fst_writer.Write(key, ref_edit_fst);
-            } else {
-                KALDI_WARN << "Empty decoding graph for utterance "
-                           << key;
-                num_fail++;
-            }
+            fst::TableCompose(ref_edit_fst, hypothesis_fst, &ref_edit_hyp_fst); // TODO add cache
 
             if (ref_edit_hyp_fst.Start() != fst::kNoStateId) {
                 num_succeed++;
                 fst_writer.Write(key, ref_edit_hyp_fst);
             } else {
-                KALDI_WARN << "Empty decoding graph for utterance "
+                KALDI_WARN << "Empty composition of transcripts with edit FST and hypothesis for utterance "
                            << key;
                 num_fail++;
+                continue;
             }
         }
 
