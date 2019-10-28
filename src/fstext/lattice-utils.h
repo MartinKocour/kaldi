@@ -125,11 +125,6 @@ void ConvertFstToLattice(
     const ExpandedFst<ArcTpl<TropicalWeight> > &ifst,
     MutableFst<ArcTpl<LatticeWeightTpl<Real> > > *ofst);
 
-template <class Real>
-void ConvertLatticeToFst(
-    const MutableFst<ArcTpl<LatticeWeightTpl<Real>>> &ifst,
-    ExpandedFst<ArcTpl<TropicalWeight>> *ofst);
-
 
 /** Returns a default 2x2 matrix scaling factor for LatticeWeight */
 inline vector<vector<double> > DefaultLatticeScale() {

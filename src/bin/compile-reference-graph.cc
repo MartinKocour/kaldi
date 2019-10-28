@@ -30,15 +30,25 @@
 #include "decoder/training-graph-compiler.h"
 #include "lat/kaldi-lattice.h"
 
+using namespace kaldi;
+typedef kaldi::int32 int32;
+using fst::SymbolTable;
+using fst::VectorFst;
+using fst::StdArc;
+using fst::MutableFst;
+using fst::MakeLinearAcceptor;
+using std::vector;
+using std::string;
+
 template<class Arc>
-void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32> &words, fst::MutableFst<Arc> *ofst) {
+void MakeEditTransducer(const vector<int32> &trans, const vector<int32> &words, MutableFst<Arc> *ofst) {
     typedef typename Arc::StateId StateId;
     typedef typename Arc::Weight Weight;
 
     // We do not create large Edit transducer with N*N arcs, where N=len(words)
 
-    std::vector<int32> uniq_labels(trans);
-    kaldi::SortAndUniq(&uniq_labels);
+    vector<int32> uniq_labels(trans);
+    SortAndUniq(&uniq_labels);
 
     ofst->DeleteStates();
     StateId cur_state = ofst->AddState();
@@ -68,26 +78,29 @@ void MakeEditTransducer(const std::vector<int32> &trans, const std::vector<int32
 }
 
 template<class Arc, class I>
-void MakeReferenceTransducer(const std::vector<I> &labels, fst::MutableFst<Arc> *ofst) {
-    fst::MakeLinearAcceptor(labels, ofst);
+void MakeReferenceTransducer(const vector<I> &labels, MutableFst<Arc> *ofst) {
+    MakeLinearAcceptor(labels, ofst);
 }
 
 template<class Arc>
-void MakeHypothesisTransducer(kaldi::CompactLattice &clat, fst::MutableFst<Arc> *ofst) {
+void MakeHypothesisTransducer(CompactLattice &clat, vector<vector<double>> scale, bool rm_eps, MutableFst<Arc> *ofst) {
+    ScaleLattice(scale, &clat); // typically scales to zero.
     fst::RemoveAlignmentsFromCompactLattice(&clat);
     kaldi::Lattice lat;
-    ConvertLattice(clat, &lat);
-    fst::Project(&lat, fst::PROJECT_OUTPUT); // project on words.
-    fst::ConvertLatticeToFst(lat, ofst);
+    ConvertLattice(clat, &lat); // convert to non-compact form.. won't introduce
+    // extra states because already removed alignments.
+    ConvertLattice(lat, ofst); // this adds up the (lm,acoustic) costs to get
+    // the normal (tropical) costs.
+    fst::Project(ofst, fst::PROJECT_OUTPUT); // project on words.
+    if (rm_eps) fst::RemoveEpsLocal(ofst);
 }
 
 int main(int argc, char *argv[]) {
     try {
-        using namespace kaldi;
-        typedef kaldi::int32 int32;
-        using fst::SymbolTable;
-        using fst::VectorFst;
-        using fst::StdArc;
+
+        BaseFloat acoustic_scale = 0.0;
+        BaseFloat lm_scale = 0.0;
+        bool rm_eps = true;
 
         const char *usage =
             "Creates FST graphs from transcripts. (Graphs are used in the lattice based SST training)\n"
@@ -96,6 +109,10 @@ int main(int argc, char *argv[]) {
             "e.g. compile-reference-graph 'words.int' 'ark:sym2int.pl --map-oov 1 -f 2- words.txt text|' ark:1.lats ark:reference.fsts\n"
             "\n";
         ParseOptions po(usage);
+        po.Register("acoustic-scale", &acoustic_scale, "Scaling factor for acoustic likelihoods");
+        po.Register("lm-scale", &lm_scale, "Scaling factor for graph/lm costs");
+        po.Register("rm-eps", &rm_eps, "Remove epsilons in resulting FSTs (in lazy way; may not remove all)");
+
         po.Read(argc, argv);
 
         if (po.NumArgs() != 4) {
@@ -103,15 +120,17 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        std::string word_rspecifier = po.GetArg(1);
-        std::string transcript_rspecifier = po.GetArg(2);
-        std::string lats_rspecifier = po.GetArg(3);
-        std::string fsts_wspecifier = po.GetArg(4);
+        string word_rspecifier = po.GetArg(1);
+        string transcript_rspecifier = po.GetArg(2);
+        string lats_rspecifier = po.GetArg(3);
+        string fsts_wspecifier = po.GetArg(4);
 
-        std::vector<int32> word_syms;
+        vector<int32> word_syms;
         if (!ReadIntegerVectorSimple(word_rspecifier, &word_syms))
             KALDI_ERR << "Could not read word symbols from "
                       << word_rspecifier;
+
+        vector<vector<double> > scale = fst::LatticeScale(lm_scale, acoustic_scale);
 
         SequentialInt32VectorReader transcript_reader(transcript_rspecifier);
         RandomAccessCompactLatticeReader clat_reader(lats_rspecifier);
@@ -126,14 +145,33 @@ int main(int argc, char *argv[]) {
             VectorFst<StdArc> edit_fst;
             MakeEditTransducer(transcript, word_syms, &edit_fst);
 
+            if (edit_fst.Start() != fst::kNoStateId) {
+                KALDI_WARN << "Empty edit FST for utterance "
+                           << key;
+                num_fail++;
+                continue;
+            }
+
             VectorFst<StdArc> reference_fst;
             MakeReferenceTransducer(transcript, &reference_fst);
 
-            CompactLattice clat = clat_reader.Value(key);
-            VectorFst<StdArc> hypothesis_fst;
-            MakeHypothesisTransducer(clat, &hypothesis_fst);
+            if (reference_fst.Start() != fst::kNoStateId) {
+                KALDI_WARN << "Empty transcript FST for utterance "
+                           << key;
+                num_fail++;
+                continue;
+            }
 
-            //TODO Add checks
+            CompactLattice clat = clat_reader.Value(key);
+            fst::VectorFst<StdArc> hypothesis_fst;
+            MakeHypothesisTransducer(clat, scale, rm_eps, &hypothesis_fst);
+
+            if (hypothesis_fst.Start() != fst::kNoStateId) {
+                KALDI_WARN << "Empty lattice for utterance "
+                           << key;
+                num_fail++;
+                continue;
+            }
 
             VectorFst<StdArc> ref_edit_fst;
             fst::TableCompose(reference_fst, edit_fst, &ref_edit_fst); // TODO add cache
