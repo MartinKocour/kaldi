@@ -83,7 +83,7 @@ void MakeReferenceTransducer(const vector<I> &labels, MutableFst<Arc> *ofst) {
 }
 
 template<class Arc>
-void MakeHypothesisTransducer(CompactLattice &clat, vector<vector<double>> scale, bool rm_eps, MutableFst<Arc> *ofst) {
+void MakeHypothesisTransducer(CompactLattice &clat, vector<vector<double>> scale, MutableFst<Arc> *ofst) {
     ScaleLattice(scale, &clat); // typically scales to zero.
     fst::RemoveAlignmentsFromCompactLattice(&clat);
     kaldi::Lattice lat;
@@ -92,7 +92,6 @@ void MakeHypothesisTransducer(CompactLattice &clat, vector<vector<double>> scale
     ConvertLattice(lat, ofst); // this adds up the (lm,acoustic) costs to get
     // the normal (tropical) costs.
     fst::Project(ofst, fst::PROJECT_OUTPUT); // project on words.
-    if (rm_eps) fst::RemoveEpsLocal(ofst);
 }
 
 int main(int argc, char *argv[]) {
@@ -100,7 +99,6 @@ int main(int argc, char *argv[]) {
 
         BaseFloat acoustic_scale = 0.0;
         BaseFloat lm_scale = 0.0;
-        bool rm_eps = true;
 
         const char *usage =
             "Creates FST graphs from transcripts. (Graphs are used in the lattice based SST training)\n"
@@ -111,7 +109,6 @@ int main(int argc, char *argv[]) {
         ParseOptions po(usage);
         po.Register("acoustic-scale", &acoustic_scale, "Scaling factor for acoustic likelihoods");
         po.Register("lm-scale", &lm_scale, "Scaling factor for graph/lm costs");
-        po.Register("rm-eps", &rm_eps, "Remove epsilons in resulting FSTs (in lazy way; may not remove all)");
 
         po.Read(argc, argv);
 
@@ -164,7 +161,7 @@ int main(int argc, char *argv[]) {
 
             CompactLattice clat = clat_reader.Value(key);
             fst::VectorFst<StdArc> hypothesis_fst;
-            MakeHypothesisTransducer(clat, scale, rm_eps, &hypothesis_fst);
+            MakeHypothesisTransducer(clat, scale, &hypothesis_fst);
 
             if (hypothesis_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty lattice for utterance "
@@ -175,8 +172,7 @@ int main(int argc, char *argv[]) {
 
             VectorFst<StdArc> ref_edit_fst;
             fst::TableCompose(reference_fst, edit_fst, &ref_edit_fst); // TODO add cache
-            fst::OLabelCompare<StdArc> olabel_comp;
-            fst::ArcSort(&ref_edit_fst, olabel_comp);
+            fst::ArcSort(&ref_edit_fst, fst::OLabelCompare<StdArc>());
 
             if (ref_edit_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty composition of transcripts with edit FST for utterance "
@@ -187,12 +183,36 @@ int main(int argc, char *argv[]) {
 
             VectorFst<StdArc> ref_edit_hyp_fst;
             fst::TableCompose(ref_edit_fst, hypothesis_fst, &ref_edit_hyp_fst); // TODO add cache
+            fst::ArcSort(&ref_edit_hyp_fst, fst::OLabelCompare<StdArc>());
 
-            if (ref_edit_hyp_fst.Start() != fst::kNoStateId) {
-                num_succeed++;
-                fst_writer.Write(key, ref_edit_hyp_fst);
-            } else {
+            if (ref_edit_hyp_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty composition of transcripts with edit FST and hypothesis for utterance "
+                           << key;
+                num_fail++;
+                continue;
+            }
+
+            VectorFst<StdArc> shortest_path;
+            fst::ShortestPath(ref_edit_hyp_fst, &shortest_path);
+            StdArc::Weight sp_weight;
+            fst::GetLinearSymbolSequence(shortest_path,
+                                         static_cast<std::vector<int32> *>(0),
+                                         static_cast<std::vector<int32> *>(0),
+                                         &sp_weight);
+            StdArc::Weight threshold = StdArc::Weight().One();
+
+            fst::Prune(&ref_edit_hyp_fst, fst::Times(sp_weight, threshold));
+            fst::Project(&ref_edit_hyp_fst, fst::PROJECT_OUTPUT);
+            fst::RmEpsilon(&ref_edit_hyp_fst); // TODO not necessary
+            VectorFst<StdArc> ref_edit_hyp_fst_determinized;
+            fst::DeterminizeStar(ref_edit_hyp_fst, &ref_edit_hyp_fst_determinized);
+            fst::MinimizeEncoded(&ref_edit_hyp_fst_determinized);
+
+            if (ref_edit_hyp_fst_determinized.Start() != fst::kNoStateId) {
+                num_succeed++;
+                fst_writer.Write(key, ref_edit_hyp_fst_determinized);
+            } else {
+                KALDI_WARN << "Empty final graph for utterance "
                            << key;
                 num_fail++;
                 continue;
