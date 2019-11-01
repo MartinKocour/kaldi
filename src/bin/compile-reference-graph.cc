@@ -57,9 +57,9 @@ void MakeEditTransducer(const vector<int32> &trans, const vector<int32> &words, 
         for (size_t j = 0; j < words.size(); j++) {
             Arc arc;
             if (words[j] == uniq_labels[i]) {
-                arc = Arc(uniq_labels[i], words[j], Weight::One(), cur_state);
+                arc = Arc(uniq_labels[i], words[j], Weight(-1.0), cur_state);
             } else {
-                arc = Arc(uniq_labels[i], words[j], Weight::Zero(), cur_state);
+                arc = Arc(uniq_labels[i], words[j], Weight::One(), cur_state);
             }
             ofst->AddArc(cur_state, arc);
         }
@@ -69,8 +69,8 @@ void MakeEditTransducer(const vector<int32> &trans, const vector<int32> &words, 
         if(words[i] == eps) {
             continue;
         }
-        Arc arc1(eps, words[i], Weight::Zero(), cur_state);
-        Arc arc2(words[i], eps, Weight::Zero(), cur_state);
+        Arc arc1(eps, words[i], Weight::One(), cur_state);
+        Arc arc2(words[i], eps, Weight::One(), cur_state);
         ofst->AddArc(cur_state, arc1);
         ofst->AddArc(cur_state, arc2);
     }
@@ -192,21 +192,13 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            VectorFst<StdArc> shortest_path;
-            fst::ShortestPath(ref_edit_hyp_fst, &shortest_path);
-            StdArc::Weight sp_weight;
-            fst::GetLinearSymbolSequence(shortest_path,
-                                         static_cast<std::vector<int32> *>(0),
-                                         static_cast<std::vector<int32> *>(0),
-                                         &sp_weight);
             StdArc::Weight threshold = StdArc::Weight().One();
-
-            fst::Prune(&ref_edit_hyp_fst, fst::Times(sp_weight, threshold));
+            fst::Prune(&ref_edit_hyp_fst, threshold);
             fst::Project(&ref_edit_hyp_fst, fst::PROJECT_OUTPUT);
-            fst::RmEpsilon(&ref_edit_hyp_fst); // TODO not necessary
+            fst::RmEpsilon(&ref_edit_hyp_fst);
             VectorFst<StdArc> ref_edit_hyp_fst_determinized;
             fst::DeterminizeStar(ref_edit_hyp_fst, &ref_edit_hyp_fst_determinized);
-            fst::MinimizeEncoded(&ref_edit_hyp_fst_determinized);
+            fst::Minimize(&ref_edit_hyp_fst_determinized);
 
             if (ref_edit_hyp_fst_determinized.Start() != fst::kNoStateId) {
                 num_succeed++;
