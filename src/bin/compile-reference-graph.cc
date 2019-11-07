@@ -37,40 +37,76 @@ using fst::VectorFst;
 using fst::StdArc;
 using fst::MutableFst;
 using fst::MakeLinearAcceptor;
+using fst::StateIterator;
+using fst::ArcIterator;
 using std::vector;
 using std::string;
 
+bool FilterWords(const vector<int32> &trans, const CompactLattice &clat, vector<int32> *words) {
+    if (words == NULL) {
+        return false;
+    }
+    *words = trans; // This will copy transcriptions to words
+    SortAndUniq(words);
+
+    vector<int32> clat_isymbols; // Lattice int32 input symbols
+
+    CompactLattice::StateId start = clat.Start();
+    if (start == fst::kNoStateId) {
+        return false; // Lattice is empty
+    }
+    for (StateIterator<CompactLattice> siter(clat); !siter.Done(); siter.Next()) {
+        const auto s = siter.Value();
+        if (s != start) {
+            for (ArcIterator<CompactLattice> aiter(clat, s); !aiter.Done(); aiter.Next()) {
+                const CompactLatticeArc &arc = aiter.Value();
+                clat_isymbols.push_back((int32) arc.ilabel);
+            }
+        }
+    }
+    // Concatenate both vectors
+    vector<int32> tmp;
+    tmp.reserve(words->size() + clat_isymbols.size());
+    tmp.insert(tmp.end(), words->begin(), words->end());
+    tmp.insert(tmp.end(), clat_isymbols.begin(), clat_isymbols.end());
+    *words = tmp;
+    SortAndUniq(words);
+    return true;
+}
+
 template<class Arc>
-void MakeEditTransducer(const vector<int32> &trans, const vector<int32> &words, MutableFst<Arc> *ofst) {
+void MakeEditTransducer(const vector<int32> &words, MutableFst<Arc> *ofst) {
     typedef typename Arc::StateId StateId;
     typedef typename Arc::Weight Weight;
 
-    // We do not create large Edit transducer with N*N arcs, where N=len(words)
-
-    vector<int32> uniq_labels(trans);
-    SortAndUniq(&uniq_labels);
+    vector<int32> labels(words);
+    SortAndUniq(&labels);
 
     ofst->DeleteStates();
     StateId cur_state = ofst->AddState();
     ofst->SetStart(cur_state);
-    for (size_t i = 0; i < uniq_labels.size(); i++) {
-        for (size_t j = 0; j < words.size(); j++) {
+
+    // Add (w_i, w_j) arcs
+    for (size_t i = 0; i < labels.size(); i++) {
+        for (size_t j = 0; j < labels.size(); j++) {
             Arc arc;
-            if (words[j] == uniq_labels[i]) {
-                arc = Arc(uniq_labels[i], words[j], Weight(-1.0), cur_state);
+            if (labels[j] == labels[i]) {
+                arc = Arc(labels[i], labels[j], Weight(-1.0), cur_state);
             } else {
-                arc = Arc(uniq_labels[i], words[j], Weight::One(), cur_state);
+                arc = Arc(labels[i], labels[j], Weight::One(), cur_state);
             }
             ofst->AddArc(cur_state, arc);
         }
     }
+
+    // Add (eps, w) and (w, eps) arcs
     int32 eps = 0;
-    for (size_t i = 0; i < words.size(); i++) {
-        if(words[i] == eps) {
+    for (size_t i = 0; i < labels.size(); i++) {
+        if(labels[i] == eps) {
             continue;
         }
-        Arc arc1(eps, words[i], Weight::One(), cur_state);
-        Arc arc2(words[i], eps, Weight::One(), cur_state);
+        Arc arc1(eps, labels[i], Weight::One(), cur_state);
+        Arc arc2(labels[i], eps, Weight::One(), cur_state);
         ofst->AddArc(cur_state, arc1);
         ofst->AddArc(cur_state, arc2);
     }
@@ -117,15 +153,9 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        string word_rspecifier = po.GetArg(1);
-        string transcript_rspecifier = po.GetArg(2);
-        string lats_rspecifier = po.GetArg(3);
-        string fsts_wspecifier = po.GetArg(4);
-
-        vector<int32> word_syms;
-        if (!ReadIntegerVectorSimple(word_rspecifier, &word_syms))
-            KALDI_ERR << "Could not read word symbols from "
-                      << word_rspecifier;
+        string transcript_rspecifier = po.GetArg(1);
+        string lats_rspecifier = po.GetArg(2);
+        string fsts_wspecifier = po.GetArg(3);
 
         vector<vector<double> > scale = fst::LatticeScale(lm_scale, acoustic_scale);
 
@@ -138,9 +168,21 @@ int main(int argc, char *argv[]) {
         for (; !transcript_reader.Done(); transcript_reader.Next()) {
             std::string key = transcript_reader.Key();
             const std::vector<int32> &transcript = transcript_reader.Value();
+            CompactLattice clat = clat_reader.Value(key);
+
+            // We do not create large Edit FST for all words
+            // Instead, we create E FST only for words,
+            // which occurs in both transcripts and in lattice
+            vector<int32> labels;
+            if (! FilterWords(transcript, clat, &labels)) {
+                KALDI_WARN << "Empty Lattice for utterance "
+                           << key;
+                num_fail++;
+                continue;
+            }
 
             VectorFst<StdArc> edit_fst;
-            MakeEditTransducer(transcript, word_syms, &edit_fst);
+            MakeEditTransducer(labels, &edit_fst);
 
             if (edit_fst.Start() == fst::kNoStateId) {
                 KALDI_WARN << "Empty edit FST for utterance "
@@ -159,7 +201,6 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            CompactLattice clat = clat_reader.Value(key);
             fst::VectorFst<StdArc> hypothesis_fst;
             MakeHypothesisTransducer(clat, scale, &hypothesis_fst);
 
