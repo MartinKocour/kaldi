@@ -137,10 +137,13 @@ int main(int argc, char *argv[]) {
         BaseFloat lm_scale = 0.0;
 
         const char *usage =
-            "Creates FST graphs from transcripts. (Graphs are used in the lattice based SST training)\n"
+            "Combine lattices with transcripts in such way that \n"
+            "they can be used in the lattice based SST training\n"
             "\n"
-            "Usage: compile-reference-graph [options] <word-rxfilename> <transcripts-rspecifier> <lattice-rspecifier> <fst-wspecifier>\n"
-            "e.g. compile-reference-graph 'words.int' 'ark:sym2int.pl --map-oov 1 -f 2- words.txt text|' ark:1.lats ark:reference.fsts\n"
+            "Usage: compile-reference-graph [options] <word-rxfilename> \n"
+            "         <transcripts-rspecifier> <lattice-rspecifier> <fst-wspecifier>\n"
+            "e.g.   compile-reference-graph 'ark:sym2int.pl --map-oov 1 -f 2- words.txt text|' \n"
+            "         ark:1.lats ark:reference.fsts\n"
             "\n";
         ParseOptions po(usage);
         po.Register("acoustic-scale", &acoustic_scale, "Scaling factor for acoustic likelihoods");
@@ -148,7 +151,7 @@ int main(int argc, char *argv[]) {
 
         po.Read(argc, argv);
 
-        if (po.NumArgs() != 4) {
+        if (po.NumArgs() != 3) {
             po.PrintUsage();
             exit(1);
         }
