@@ -171,6 +171,12 @@ int main(int argc, char *argv[]) {
         for (; !transcript_reader.Done(); transcript_reader.Next()) {
             std::string key = transcript_reader.Key();
             const std::vector<int32> &transcript = transcript_reader.Value();
+
+            if (!clat_reader.HasKey(key)) {
+                num_fail++;
+                continue;
+            }
+
             CompactLattice clat = clat_reader.Value(key);
 
             // We do not create large Edit FST for all words
