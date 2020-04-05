@@ -108,7 +108,7 @@ if [ -f $srcdir/frame_subsampling_factor ]; then
     echo "$0: frame-subsampling-factor is not 1 (so likely a chain system),"
     echo "...  but the scale opts are the defaults.  You probably want"
     echo "--scale-opts '--transition-scale=1.0 --acoustic-scale=1.0 --self-loop-scale=1.0'"
-    sleep 1
+    exit 1
   fi
 fi
 

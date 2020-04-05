@@ -167,7 +167,7 @@ do_combine() {
   sort -m $temp_dir/$ark.*.scp > $temp_dir/$ark.scp || exit 1
 
   inputs=$(for n in `seq $nj`; do echo $temp_dir/$ark.$n.scp; done)
-  utils/split_scp.pl --utt2spk=$data/utt2spk $temp_dir/$ark.scp $inputs
+  utils/split_scp.pl --utt2spk=$data/utt2spk $temp_dir/$ark.scp $inputs || exit 1
 
   echo "$0: Splitting combined $entities into $nj archives on speaker boundary."
   $cmd JOB=1:$nj $dest/log/chop_combined_$entities.JOB.log \
